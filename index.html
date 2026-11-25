@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#171321">
+<title>AudioStickers</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#171321;color:#fff;font:16px system-ui,sans-serif;padding:22px}
+h1{margin:8px 0;color:#d9b8ff}p{color:#c9bfd4}.card{background:#241d32;border:1px solid #514365;border-radius:18px;padding:18px;margin:16px 0}
+label{display:block;margin:14px 0 7px;font-weight:600}input,button{width:100%;padding:13px;border-radius:12px;border:1px solid #6b5a82;background:#332844;color:white;font-size:16px}
+button{background:#8b4bd1;border:0;font-weight:700;margin-top:12px}button:disabled{opacity:.5}
+canvas{display:block;width:min(100%,360px);aspect-ratio:1;margin:14px auto;background:#fff;border-radius:14px}
+.small{font-size:13px;color:#b9adc7}.row{display:flex;gap:10px}.row button{flex:1}
+</style>
+</head>
+<body>
+<h1>🔊 AudioStickers</h1>
+<p>Crea una imagen tipo sticker y acompáñala con un sonido o tu voz.</p>
+<section class="card">
+<label for="image">1. Elige una imagen</label><input id="image" type="file" accept="image/*">
+<label for="caption">2. Añade un texto (opcional)</label><input id="caption" maxlength="50" placeholder="Escribe algo...">
+<canvas id="canvas" width="512" height="512"></canvas>
+<button id="saveImage">Guardar sticker PNG</button>
+</section>
+<section class="card">
+<label for="audio">3. Elige un audio</label><input id="audio" type="file" accept="audio/*">
+<button id="record">🎙️ Grabar voz</button>
+<p id="recordStatus" class="small">También puedes seleccionar un audio guardado en tu teléfono.</p>
+<button id="saveAudio">Guardar audio</button>
+<button id="share">Compartir imagen + audio</button>
+<p class="small">Nota: WhatsApp no permite que un sticker normal reproduzca audio al tocarlo. Esta app comparte la imagen y el sonido juntos como archivos separados.</p>
+</section>
+<script>
+const imageInput=document.getElementById('image'), audioInput=document.getElementById('audio');
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+let imageFile=null,audioFile=null,recorder=null,chunks=[];
+function draw(){
+ ctx.fillStyle='#ffffff';ctx.fillRect(0,0,512,512);
+ if(imageFile){const im=new Image();im.onload=()=>{const s=Math.min(440/im.width,440/im.height);const w=im.width*s,h=im.height*s;ctx.drawImage(im,(512-w)/2,(512-h)/2,w,h);drawText()};im.src=URL.createObjectURL(imageFile)}
+ else drawText();
+}
+function drawText(){const t=document.getElementById('caption').value;if(t){ctx.font='bold 34px system-ui';ctx.textAlign='center';ctx.lineWidth=7;ctx.strokeStyle='white';ctx.fillStyle='#171321';ctx.strokeText(t,256,480,470);ctx.fillText(t,256,480,470)}}
+imageInput.onchange=()=>{imageFile=imageInput.files[0];draw()};
+document.getElementById('caption').oninput=draw;
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}
+document.getElementById('saveImage').onclick=()=>canvas.toBlob(b=>download(b,'sticker.png'),'image/png');
+audioInput.onchange=()=>audioFile=audioInput.files[0];
+document.getElementById('saveAudio').onclick=()=>{if(audioFile)download(audioFile,audioFile.name||'audio.webm');else alert('Primero elige o graba un audio.')};
+document.getElementById('record').onclick=async()=>{
+ try{
+  if(recorder&&recorder.state==='recording'){recorder.stop();document.getElementById('record').textContent='🎙️ Grabar voz';return}
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true});chunks=[];
+  recorder=new MediaRecorder(stream);recorder.ondataavailable=e=>chunks.push(e.data);
+  recorder.onstop=()=>{audioFile=new File(chunks,'voz.webm',{type:recorder.mimeType||'audio/webm'});audioInput.value='';stream.getTracks().forEach(t=>t.stop());document.getElementById('recordStatus').textContent='Voz grabada. Ya puedes compartirla o guardarla.'};
+  recorder.start();document.getElementById('record').textContent='⏹ Detener grabación';document.getElementById('recordStatus').textContent='Grabando...';
+ }catch(e){alert('No se pudo acceder al micrófono. Revisa los permisos del teléfono.')}
+};
+document.getElementById('share').onclick=async()=>{
+ if(!audioFile){alert('Primero elige o graba un audio.');return}
+ canvas.toBlob(async png=>{
+  const files=[new File([png],'sticker.png',{type:'image/png'}),audioFile];
+  try{if(navigator.canShare&&navigator.canShare({files}))await navigator.share({files,title:'AudioStickers',text:'Mi sticker con audio'});else{download(png,'sticker.png');download(audioFile,audioFile.name||'audio.webm');alert('Se guardaron los dos archivos por separado.')}}
+  catch(e){if(e.name!=='AbortError')alert('No se pudo abrir el menú para compartir.')}
+ },'image/png');
+};
+draw();
+</script>
+</body></html>
